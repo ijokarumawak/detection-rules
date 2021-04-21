@@ -1,0 +1,6 @@
+[customer]
+name = "Bespoke"
+rules = [
+    "apm",
+    "azure"
+]

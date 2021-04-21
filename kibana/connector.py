@@ -113,7 +113,15 @@ class Kibana(object):
 
     def login(self, kibana_username, kibana_password):
         """Authenticate to Kibana using the API to update our cookies."""
-        payload = {'username': kibana_username, 'password': kibana_password}
+        payload = {
+            'providerType': 'basic',
+            'providerName': 'basic',
+            'currentURL': '',
+            'params': {
+                'username': kibana_username,
+                'password': kibana_password
+            }
+        }
         path = '/internal/security/login'
 
         try:

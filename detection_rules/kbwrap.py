@@ -4,12 +4,16 @@
 # 2.0.
 
 """Kibana cli commands."""
+import glob
+import os
+from functools import reduce
 import click
 import kql
 from kibana import Kibana, Signal, RuleResource
 
 from .main import root
 from .misc import add_params, client_error, kibana_options
+from .customer_loader import load_customer_files
 from .rule_loader import load_rule_files, load_rules
 from .utils import format_command_options
 
@@ -52,7 +56,7 @@ def kibana_group(ctx: click.Context, **kibana_kwargs):
 @click.argument("toml-files", nargs=-1, required=True)
 @click.option('--replace-id', '-r', is_flag=True, help='Replace rule IDs with new IDs before export')
 @click.pass_context
-def upload_rule(ctx, toml_files, replace_id):
+def upload_rule(ctx, toml_files, replace_id, decorator=None):
     """Upload a list of rule .toml files to Kibana."""
     from .packaging import manage_versions
 
@@ -74,11 +78,37 @@ def upload_rule(ctx, toml_files, replace_id):
         except ValueError as e:
             client_error(f'{e} in version:{kibana.version}, for rule: {rule.name}', e, ctx=ctx)
         rule = RuleResource(payload)
+
+        if decorator:
+            rule = decorator(rule)
+
         api_payloads.append(rule)
 
     with kibana:
         rules = RuleResource.bulk_create(api_payloads)
         click.echo(f"Successfully uploaded {len(rules)} rules")
+
+
+@kibana_group.command("upload-customer")
+@click.argument("toml-files", nargs=-1, required=True)
+@click.pass_context
+def upload_customer(ctx, toml_files):
+    """Upload a list of customer .toml files to Kibana."""
+    customer_files = load_customer_files(paths=toml_files)
+    for customer_file in customer_files.values():
+        customer = customer_file['customer']
+        click.echo(f"Loading rules for {customer['name']} {customer['rules']}")
+
+        rule_files = reduce(list.__add__,
+                            map((lambda r: sorted(glob.glob(os.path.join('rules/' + r, '*.toml')))),
+                                customer['rules']))
+
+        def decorator(rule):
+            rule['tags'].append(customer['name'])
+            return rule
+
+        ctx.invoke(upload_rule, toml_files=rule_files, replace_id=False, decorator=decorator)
+        click.echo(f"Successfully uploaded rules for {customer['name']}")
 
 
 @kibana_group.command('search-alerts')
