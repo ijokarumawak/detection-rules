@@ -83,7 +83,8 @@ def upload_rule(ctx, toml_files, replace_id, dry_run, decorator=None):
         if decorator:
             rule = decorator(rule)
 
-        api_payloads.append(rule)
+        if rule:
+            api_payloads.append(rule)
 
     if dry_run:
         click.echo(f"Uploading {len(rules)} rules")
@@ -121,13 +122,20 @@ def upload_customer(ctx, dry_run, toml_files):
             with kibana:
                 try:
                     current_rule = next(RuleResource.find(filter='alert.attributes.tags:' + customer_rule_id
-                                                          + ' AND alert.attributes.enabled:true'))
+                                                                 + ' AND alert.attributes.enabled:true'))
                     # TODO: copy exception
                     # TODO: copy timeline template
-                    # TODO: remove? If version is the same, then do nothing. Otherwise, disable the current. Patch enabled false
-                    current_rule['enabled'] = False
+                    # If the version is different, then disable old one.
+                    # Rule versions are defined at version.lock.json.
                     print(current_rule)
-                    print(current_rule.put())
+                    if rule['version'] > current_rule['version']:
+                        print(f"Upgrading rule {customer_rule_id} from {current_rule['version']} to {rule['version']}")
+                        current_rule['enabled'] = False
+                        current_rule.put()
+                    else:
+                        print(f"Rule {customer_rule_id} ver {current_rule['version']} already exists. Do nothing.")
+                        return None
+
                 except StopIteration:
                     pass
 
