@@ -1,6 +1,9 @@
 [customer]
+id = 'bespoke'
 name = "Bespoke"
 rules = [
-    "apm",
-    "azure"
+#    "apm/apm_403_response_to_a_post.toml",
+#    "apm/apm_405_response_method_not_allowed.toml",
+#    "azure/defense_evasion_event_hub_deletion.toml",
+    "linux/credential_access_tcpdump_activity.toml"
 ]
