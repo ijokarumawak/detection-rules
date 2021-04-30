@@ -1,5 +1,7 @@
 [customer]
+id = 'awesome'
 name = "Awesome"
 rules = [
-    "apm"
+    # "apm/*.toml",
+    "linux/credential_access_tcpdump_activity.toml"
 ]

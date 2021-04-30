@@ -14,7 +14,7 @@ from kibana import Kibana, Signal, RuleResource
 from .main import root
 from .misc import add_params, client_error, kibana_options
 from .customer_loader import load_customer_files
-from .rule_loader import load_rule_files, load_rules
+from . import rule_loader
 from .utils import format_command_options
 
 
@@ -55,14 +55,15 @@ def kibana_group(ctx: click.Context, **kibana_kwargs):
 @kibana_group.command("upload-rule")
 @click.argument("toml-files", nargs=-1, required=True)
 @click.option('--replace-id', '-r', is_flag=True, help='Replace rule IDs with new IDs before export')
+@click.option("--dry-run", '-d', is_flag=True, help='Test configurations')
 @click.pass_context
-def upload_rule(ctx, toml_files, replace_id, decorator=None):
+def upload_rule(ctx, toml_files, replace_id, dry_run, decorator=None):
     """Upload a list of rule .toml files to Kibana."""
     from .packaging import manage_versions
 
     kibana = ctx.obj['kibana']
-    file_lookup = load_rule_files(paths=toml_files)
-    rules = list(load_rules(file_lookup=file_lookup).values())
+    file_lookup = rule_loader.load_rule_files(paths=toml_files)
+    rules = list(rule_loader.load_rules(file_lookup=file_lookup).values())
 
     # assign the versions from etc/versions.lock.json
     # rules that have changed in hash get incremented, others stay as-is.
@@ -84,6 +85,11 @@ def upload_rule(ctx, toml_files, replace_id, decorator=None):
 
         api_payloads.append(rule)
 
+    if dry_run:
+        click.echo(f"Uploading {len(rules)} rules")
+        click.echo(api_payloads)
+        return
+
     with kibana:
         rules = RuleResource.bulk_create(api_payloads)
         click.echo(f"Successfully uploaded {len(rules)} rules")
@@ -91,8 +97,9 @@ def upload_rule(ctx, toml_files, replace_id, decorator=None):
 
 @kibana_group.command("upload-customer")
 @click.argument("toml-files", nargs=-1, required=True)
+@click.option("--dry-run", '-d', is_flag=True, help='Test configurations')
 @click.pass_context
-def upload_customer(ctx, toml_files):
+def upload_customer(ctx, dry_run, toml_files):
     """Upload a list of customer .toml files to Kibana."""
     customer_files = load_customer_files(paths=toml_files)
     for customer_file in customer_files.values():
@@ -100,15 +107,40 @@ def upload_customer(ctx, toml_files):
         click.echo(f"Loading rules for {customer['name']} {customer['rules']}")
 
         rule_files = reduce(list.__add__,
-                            map((lambda r: sorted(glob.glob(os.path.join('rules/' + r, '*.toml')))),
+                            map((lambda r: sorted(glob.glob(os.path.join('rules/', r)))),
                                 customer['rules']))
 
         def decorator(rule):
+            customer_rule_id = customer['id'] + '_' + rule['meta']['original']['id']
             rule['tags'].append(customer['name'])
+            rule['tags'].append(customer_rule_id)
+            # TODO: modify index
+
+            # TODO: Load current rules, capture configured exceptions and timeline templates.
+            kibana = ctx.obj['kibana']
+            with kibana:
+                try:
+                    current_rule = next(RuleResource.find(filter='alert.attributes.tags:' + customer_rule_id
+                                                          + ' AND alert.attributes.enabled:true'))
+                    # TODO: copy exception
+                    # TODO: copy timeline template
+                    # TODO: remove? If version is the same, then do nothing. Otherwise, disable the current. Patch enabled false
+                    current_rule['enabled'] = False
+                    print(current_rule)
+                    print(current_rule.put())
+                except StopIteration:
+                    pass
+
             return rule
 
-        ctx.invoke(upload_rule, toml_files=rule_files, replace_id=False, decorator=decorator)
+        # Replace id is required, because the same id cannot be used among multiple customers.
+        # Also, the id format is validated at the GET /api/detection_engine/rules?id=XXX.
+        # The id must be in the form of uuid4.
+        ctx.invoke(upload_rule, toml_files=rule_files, replace_id=True, dry_run=dry_run, decorator=decorator)
         click.echo(f"Successfully uploaded rules for {customer['name']}")
+        rule_loader.reset()
+
+
 
 
 @kibana_group.command('search-alerts')

@@ -47,8 +47,8 @@ class BaseResource(dict):
         return Kibana.current().get(cls.BASE_URI, params={cls.ID_FIELD: resource_id})
 
     def put(self):
-        response = Kibana.current().put(self.BASE_URI, data=self.to_dict())
-        self._update_from(response)
+        # TODO: Do we have to capture anything within the `response`?
+        response = Kibana.current().put(self.BASE_URI, data=self)
         return self
 
     def delete(self):
@@ -132,15 +132,28 @@ class RuleResource(BaseResource):
         rule_id = self.get("rule_id")
         self.pop("rule_id", None)
 
+        for f in ["created_at",
+                  "updated_at",
+                  "created_by",
+                  "immutable",
+                  "updated_by",
+                  "status",
+                  "status_date",
+                  "last_success_at",
+                  "last_success_message"]:
+            if f in self:
+                self.pop(f, None)
+
         try:
             # apparently Kibana doesn't like `rule_id` for existing documents
-            return super(RuleResource, self).update()
+            return super(RuleResource, self).put()
         except Exception:
             # if it fails, restore the id back
             if rule_id:
                 self["rule_id"] = rule_id
 
             raise
+
 
 
 class Signal(BaseResource):
