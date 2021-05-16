@@ -6,6 +6,7 @@
 """Kibana cli commands."""
 import glob
 import os
+import re
 from functools import reduce
 import click
 import kql
@@ -115,25 +116,38 @@ def upload_customer(ctx, dry_run, toml_files):
             customer_rule_id = customer['id'] + '_' + rule['meta']['original']['id']
             rule['tags'].append(customer['name'])
             rule['tags'].append(customer_rule_id)
-            # TODO: modify index
+            rule['tags'].append(f"original_version_{rule['version']}")
 
-            # TODO: Load current rules, capture configured exceptions and timeline templates.
+            # Modify index
+            rule['index'] = list(map(lambda idx: customer['id'] + '_' + idx, rule['index']))
+
+            # Load current rules, capture configured exceptions and timeline templates.
             kibana = ctx.obj['kibana']
             with kibana:
                 try:
                     current_rule = next(RuleResource.find(filter='alert.attributes.tags:' + customer_rule_id
                                                                  + ' AND alert.attributes.enabled:true'))
-                    # TODO: copy exception
-                    # TODO: copy timeline template
                     # If the version is different, then disable old one.
                     # Rule versions are defined at version.lock.json.
                     print(current_rule)
-                    if rule['version'] > current_rule['version']:
-                        print(f"Upgrading rule {customer_rule_id} from {current_rule['version']} to {rule['version']}")
+                    print(f"Current exceptions_list {current_rule['exceptions_list']}")
+
+                    # The version of rule can be incremented when it gets updated by the user from Kibana UI.
+                    # The original version is recorded as a tag.
+                    # Cannot rely on 'meta' tag as it gets overwritten when the user updated the rule.
+                    current_rule_version = get_original_version(current_rule['tags'])
+                    if rule['version'] > current_rule_version:
+                        print(f"Upgrading rule {customer_rule_id} from {current_rule_version} to {rule['version']}")
                         current_rule['enabled'] = False
                         current_rule.put()
+
+                        # copy exception
+                        rule['exceptions_list'] = current_rule['exceptions_list']
+                        # copy timeline template
+                        rule['timeline_id'] = current_rule['timeline_id']
+                        rule['timeline_title'] = current_rule['timeline_title']
                     else:
-                        print(f"Rule {customer_rule_id} ver {current_rule['version']} already exists. Do nothing.")
+                        print(f"Rule {customer_rule_id} ver {current_rule_version} already exists. Do nothing.")
                         return None
 
                 except StopIteration:
@@ -149,6 +163,12 @@ def upload_customer(ctx, dry_run, toml_files):
         rule_loader.reset()
 
 
+def get_original_version(tags):
+    for tag in tags:
+        m = re.search(r"^original_version_(\d+)$", tag)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 @kibana_group.command('search-alerts')
