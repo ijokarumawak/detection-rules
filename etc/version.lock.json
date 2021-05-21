@@ -1799,6 +1799,11 @@
     "sha256": "e3474858022371a4edaaa39fd660b12f67e6c649bdb7e5c38ee4d4d567776a4d",
     "version": 1
   },
+  "92b747dc-0c42-4b9b-b3a7-7a19937c909f": {
+    "rule_name": "Custom Rule Example",
+    "sha256": "2e0f574b884ac9903911ea1727e6bda22dc9b33484b84812bce13cc550f13348",
+    "version": 1
+  },
   "931e25a5-0f5e-4ae0-ba0d-9e94eff7e3a4": {
     "rule_name": "Sudoers File Modification",
     "sha256": "05ff439f67984de234a47b20f014bdbbcef5f63a6cb769333c50dc9f71995478",

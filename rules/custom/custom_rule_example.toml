@@ -1,0 +1,20 @@
+[metadata]
+creation_date = "2021/05/21"
+maturity = "development"
+updated_date = "2021/05/21"
+
+[rule]
+author = ["foo"]
+description = "カスタムルール例、更新, updated"
+language = "kuery"
+license = "Elastic License v2"
+name = "Custom Rule Example"
+risk_score = 21
+rule_id = "92b747dc-0c42-4b9b-b3a7-7a19937c909f"
+severity = "low"
+type = "query"
+
+query = '''
+host.name: "example.com"
+'''
+

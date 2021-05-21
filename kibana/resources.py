@@ -140,7 +140,9 @@ class RuleResource(BaseResource):
                   "status",
                   "status_date",
                   "last_success_at",
-                  "last_success_message"]:
+                  "last_success_message",
+                  "last_failure_at",
+                  "last_failure_message"]:
             if f in self:
                 self.pop(f, None)
 
