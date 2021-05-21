@@ -112,14 +112,20 @@ def upload_customer(ctx, dry_run, toml_files):
                             map((lambda r: sorted(glob.glob(os.path.join('rules/', r)))),
                                 customer['rules']))
 
+        # TODO: Delete rules that no longer exists in the customer toml file.
+
         def decorator(rule):
             customer_rule_id = customer['id'] + '_' + rule['meta']['original']['id']
+            if 'tags' not in rule:
+                rule['tags'] = []
+
             rule['tags'].append(customer['name'])
             rule['tags'].append(customer_rule_id)
             rule['tags'].append(f"original_version_{rule['version']}")
 
             # Modify index
-            rule['index'] = list(map(lambda idx: customer['id'] + '_' + idx, rule['index']))
+            if 'index' in rule:
+                rule['index'] = list(map(lambda idx: customer['id'] + '_' + idx, rule['index']))
 
             # Load current rules, capture configured exceptions and timeline templates.
             kibana = ctx.obj['kibana']

@@ -3,5 +3,6 @@ id = 'awesome'
 name = "Awesome"
 rules = [
     # "apm/*.toml",
-    "linux/credential_access_tcpdump_activity.toml"
+    "linux/credential_access_tcpdump_activity.toml",
+    "custom/custom_rule_example.toml"
 ]
