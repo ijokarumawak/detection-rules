@@ -148,10 +148,16 @@ def upload_customer(ctx, dry_run, toml_files):
                         current_rule.put()
 
                         # copy exception
-                        rule['exceptions_list'] = current_rule['exceptions_list']
+                        if 'exceptions_list' in current_rule:
+                            rule['exceptions_list'] = current_rule['exceptions_list']
+
                         # copy timeline template
-                        rule['timeline_id'] = current_rule['timeline_id']
-                        rule['timeline_title'] = current_rule['timeline_title']
+                        if 'timeline_id' in current_rule:
+                            rule['timeline_id'] = current_rule['timeline_id']
+
+                        if 'timeline_title' in current_rule:
+                            rule['timeline_title'] = current_rule['timeline_title']
+
                     else:
                         print(f"Rule {customer_rule_id} ver {current_rule_version} already exists. Do nothing.")
                         return None
