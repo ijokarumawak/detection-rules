@@ -1802,7 +1802,7 @@
   "92b747dc-0c42-4b9b-b3a7-7a19937c909f": {
     "rule_name": "Custom Rule Example",
     "sha256": "190906b8950a680623cefa5a84cdddb0e8324606677a624757952ad49e78ce4b",
-    "version": 1
+    "version": 2
   },
   "931e25a5-0f5e-4ae0-ba0d-9e94eff7e3a4": {
     "rule_name": "Sudoers File Modification",

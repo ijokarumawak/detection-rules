@@ -4,7 +4,7 @@ maturity = "development"
 updated_date = "2021/05/21"
 
 [rule]
-author = ["foo"]
+author = ["foo", "bar"]
 description = "カスタムルール例、更新, updated"
 language = "kuery"
 license = "Elastic License v2"

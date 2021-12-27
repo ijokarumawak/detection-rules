@@ -148,7 +148,9 @@ class RuleResource(BaseResource):
 
         try:
             # apparently Kibana doesn't like `rule_id` for existing documents
-            return super(RuleResource, self).put()
+            res = super(RuleResource, self).put()
+            print(res)
+            return res
         except Exception:
             # if it fails, restore the id back
             if rule_id:
