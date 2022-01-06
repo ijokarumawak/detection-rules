@@ -108,11 +108,21 @@ def upload_customer(ctx, dry_run, toml_files):
                             map((lambda r: sorted(glob.glob(os.path.join('rules/', r)))),
                                 customer['rules']))
 
-        # TODO: Delete rules that no longer exists in the customer toml file.
+        existing_rules = []
+        active_customer_rule_ids = []
+        kibana = ctx.obj['kibana']
+        with kibana:
+            for existing_rule in RuleResource.find(filter='alert.attributes.tags:' + customer['name']
+                                                          + ' AND alert.attributes.enabled:true'):
+                existing_rules.append(existing_rule)
+
+        click.echo(f"There are {len(existing_rules)} existing rules for customer {customer['name']}")
 
         def decorator(rule):
-            print(rule)
+            # print(rule)
             customer_rule_id = customer['id'] + '_' + rule['meta']['original']['id']
+            active_customer_rule_ids.append(customer_rule_id)
+            rule_log_id = f"[{customer_rule_id}] \"{rule['name']}\""
             if 'tags' not in rule:
                 rule['tags'] = []
 
@@ -125,55 +135,65 @@ def upload_customer(ctx, dry_run, toml_files):
                 rule['index'] = list(map(lambda idx: customer['id'] + '_' + idx, rule['index']))
 
             # Load current rules, capture configured exceptions and timeline templates.
-            kibana = ctx.obj['kibana']
-            with kibana:
-                try:
-                    current_rule = next(RuleResource.find(filter='alert.attributes.tags:' + customer_rule_id
-                                                                 + ' AND alert.attributes.enabled:true'))
-                    # If the version is different, then disable old one.
-                    # Rule versions are defined at version.lock.json.
-                    print(f"Found the existing rule {customer_rule_id}")
-                    print(current_rule)
-                    print(f"Current exceptions_list {current_rule['exceptions_list']}")
+            try:
+                current_rule = next(r for r in existing_rules if customer_rule_id in r['tags'])
 
-                    # The version of rule can be incremented when it gets updated by the user from Kibana UI.
-                    # The original version is recorded as a tag.
-                    # Cannot rely on 'meta' tag as it gets overwritten when the user updated the rule.
-                    current_rule_version = get_original_version(current_rule['tags'])
-                    if rule['version'] > current_rule_version:
-                        print(f"Upgrading rule {customer_rule_id} from {current_rule_version} to {rule['version']}")
-                        current_rule['enabled'] = False
-                        current_rule.put()
+                # If the version is different, then disable old one.
+                # Rule versions are defined at version.lock.json.
+                click.echo(f"Found the existing rule {rule_log_id}")
+                click.echo(current_rule)
+                click.echo(f"Current exceptions_list {current_rule['exceptions_list']}")
 
-                        # copy exception
-                        if 'exceptions_list' in current_rule:
-                            rule['exceptions_list'] = current_rule['exceptions_list']
+                # The version of rule can be incremented when it gets updated by the user from Kibana UI.
+                # The original version is recorded as a tag.
+                # Cannot rely on 'meta' tag as it gets overwritten when the user updated the rule.
+                current_rule_version = get_original_version(current_rule['tags'])
+                if rule['version'] > current_rule_version:
+                    click.echo(f"Upgrading rule {rule_log_id} from {current_rule_version} to {rule['version']}")
+                    current_rule['enabled'] = False
+                    current_rule.put()
 
-                        # copy timeline template
-                        if 'timeline_id' in current_rule:
-                            rule['timeline_id'] = current_rule['timeline_id']
+                    # copy exception
+                    if 'exceptions_list' in current_rule:
+                        rule['exceptions_list'] = current_rule['exceptions_list']
 
-                        if 'timeline_title' in current_rule:
-                            rule['timeline_title'] = current_rule['timeline_title']
+                    # copy timeline template
+                    if 'timeline_id' in current_rule:
+                        rule['timeline_id'] = current_rule['timeline_id']
 
-                    else:
-                        print(f"Rule {customer_rule_id} ver {current_rule_version} already exists. Do nothing.")
-                        return None
+                    if 'timeline_title' in current_rule:
+                        rule['timeline_title'] = current_rule['timeline_title']
 
-                except StopIteration:
-                    print(f"Rule {customer_rule_id} does not exist yet. Creating it.")
-                    pass
+                else:
+                    click.echo(f"Rule {rule_log_id} ver {current_rule_version} already exists. Do nothing.")
+                    return None
+
+            except StopIteration:
+                click.echo(f"Rule {rule_log_id} does not exist yet. Creating it.")
+                pass
 
             return rule
 
         if len(rule_files) == 0:
             click.echo(f"No rules defined for {customer['name']}")
-            return
+        else:
+            # Replace id is required, because the same id cannot be used among multiple customers.
+            # Also, the id format is validated at the GET /api/detection_engine/rules?id=XXX.
+            # The id must be in the form of uuid4.
+            ctx.invoke(upload_rule, rule_file=rule_files, replace_id=True, dry_run=dry_run, decorator=decorator)
 
-        # Replace id is required, because the same id cannot be used among multiple customers.
-        # Also, the id format is validated at the GET /api/detection_engine/rules?id=XXX.
-        # The id must be in the form of uuid4.
-        ctx.invoke(upload_rule, rule_file=rule_files, replace_id=True, dry_run=dry_run, decorator=decorator)
+        inactive_rules = [ext_rule for ext_rule in existing_rules
+                          if not any(cus_rid in ext_rule['tags'] for cus_rid in active_customer_rule_ids)]
+
+        # Disable rules that no longer exists in the customer toml file.
+        if len(inactive_rules) > 0:
+            click.echo(f"Deactivating {len(inactive_rules)} existing rules...")
+            with kibana:
+                for inactive_rule in inactive_rules:
+                    click.echo(f"{inactive_rule['name']}: {inactive_rule['tags']}")
+                    if not dry_run:
+                        inactive_rule['enabled'] = False
+                        inactive_rule.put()
 
         if dry_run:
             click.echo(f"Checked rules for {customer['name']}")

@@ -148,16 +148,13 @@ class RuleResource(BaseResource):
 
         try:
             # apparently Kibana doesn't like `rule_id` for existing documents
-            res = super(RuleResource, self).put()
-            print(res)
-            return res
+            return super(RuleResource, self).put()
         except Exception:
             # if it fails, restore the id back
             if rule_id:
                 self["rule_id"] = rule_id
 
             raise
-
 
 
 class Signal(BaseResource):
